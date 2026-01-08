@@ -53,10 +53,12 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
                         activo = partes[8] if len(partes) > 8 else ''
                         
                         # Validar que no sea una línea de encabezado ni de opciones
+                        # IMPORTANTE: Solo agregar si "Activo" es Y o N
                         if (cod_usuario and 
                             cod_usuario.strip() and 
                             cod_usuario != 'Cod Usuario' and
-                            cod_usuario != 'Formas'):
+                            cod_usuario != 'Formas' and
+                            activo.strip().upper() in ['Y', 'N']):
                             
                             grupos[codigo_grupo]['usuarios'].append({
                                 'codigo': cod_usuario,
@@ -91,7 +93,12 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
                         activo = partes[5]
                         
                         # Evitar líneas de encabezado
-                        if cod_usuario and cod_usuario.strip() and cod_usuario != 'Cod Usuario':
+                        # IMPORTANTE: Solo agregar si "Activo" es Y o N
+                        if (cod_usuario and 
+                            cod_usuario.strip() and 
+                            cod_usuario != 'Cod Usuario' and
+                            activo.strip().upper() in ['Y', 'N']):
+                            
                             grupos[codigo_grupo]['usuarios'].append({
                                 'codigo': cod_usuario,
                                 'nombre': nombre_usuario,
