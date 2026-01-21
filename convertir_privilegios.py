@@ -14,7 +14,9 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
         'codigo': '',
         'nombre': '',
         'usuarios': [],
-        'opciones': []
+        'formas': [],
+        'reportes': [],
+        'procesos': []
     })
     
     print("Leyendo archivo...")
@@ -46,14 +48,12 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
                 
                 if idx_opciones is not None:
                     # CASO 1: Línea de usuario con "OPCIONES POR GRUPO" al final
-                    # Formato: GRUPO|006|ANALISTA MERCADEO|Cod Usuario|Nombre del Usuario|Activo|SVALEN|SEBASTIAN VALENCIA|Y|OPCIONES POR GRUPO|
-                    if idx_opciones >= 6:  # Hay datos de usuario antes de "OPCIONES POR GRUPO"
+                    if idx_opciones >= 6:
                         cod_usuario = partes[6] if len(partes) > 6 else ''
                         nombre_usuario = partes[7] if len(partes) > 7 else ''
                         activo = partes[8] if len(partes) > 8 else ''
                         
-                        # Validar que no sea una línea de encabezado ni de opciones
-                        # IMPORTANTE: Solo agregar si "Activo" es Y o N
+                        # Validar que solo sea Y o N en Activo
                         if (cod_usuario and 
                             cod_usuario.strip() and 
                             cod_usuario != 'Cod Usuario' and
@@ -67,23 +67,36 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
                             })
                             print(f"  Usuario agregado al grupo {codigo_grupo}: {cod_usuario} - {nombre_usuario}")
                     
-                    # CASO 2: Línea de opciones
-                    # Formato: GRUPO|006|...|OPCIONES POR GRUPO|Formas|Insertar|Modificar|...
-                    # Verificar si después de "OPCIONES POR GRUPO" están los encabezados de opciones
+                    # CASO 2: Línea de opciones (Formas o Reportes)
                     if len(partes) > idx_opciones + 1:
                         siguiente = partes[idx_opciones + 1]
                         
-                        # Si después de "OPCIONES POR GRUPO" viene "Formas", es una línea de opciones
+                        # Si después de "OPCIONES POR GRUPO" viene "Formas"
                         if siguiente == 'Formas' and len(partes) > idx_opciones + 7:
-                            # Extraer los datos de la opción (nombre de la forma y permisos)
-                            datos_opcion = partes[idx_opciones + 8:]  # Después de los encabezados
-                            
-                            # Filtrar elementos vacíos
+                            datos_opcion = partes[idx_opciones + 8:]
                             datos_opcion = [d for d in datos_opcion if d.strip()]
                             
-                            if len(datos_opcion) >= 2:  # Al menos nombre de forma y un permiso
-                                grupos[codigo_grupo]['opciones'].append(datos_opcion)
-                                print(f"  Opción agregada al grupo {codigo_grupo}: {datos_opcion[0]}")
+                            if len(datos_opcion) >= 2:
+                                grupos[codigo_grupo]['formas'].append(datos_opcion)
+                                print(f"  Forma agregada al grupo {codigo_grupo}: {datos_opcion[0]}")
+                        
+                        # Si después de "OPCIONES POR GRUPO" viene "Reportes"
+                        elif siguiente == 'Reportes' and len(partes) > idx_opciones + 7:
+                            datos_reporte = partes[idx_opciones + 8:]
+                            datos_reporte = [d for d in datos_reporte if d.strip()]
+                            
+                            if len(datos_reporte) >= 2:
+                                grupos[codigo_grupo]['reportes'].append(datos_reporte)
+                                print(f"  Reporte agregado al grupo {codigo_grupo}: {datos_reporte[0]}")
+                        
+                        # Si después de "OPCIONES POR GRUPO" viene "Procesos"
+                        elif siguiente == 'Procesos' and len(partes) > idx_opciones + 7:
+                            datos_proceso = partes[idx_opciones + 8:]
+                            datos_proceso = [d for d in datos_proceso if d.strip()]
+                            
+                            if len(datos_proceso) >= 2:
+                                grupos[codigo_grupo]['procesos'].append(datos_proceso)
+                                print(f"  Proceso agregado al grupo {codigo_grupo}: {datos_proceso[0]}")
                 
                 else:
                     # Sin "OPCIONES POR GRUPO" - línea de usuario normal
@@ -92,8 +105,7 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
                         nombre_usuario = partes[4]
                         activo = partes[5]
                         
-                        # Evitar líneas de encabezado
-                        # IMPORTANTE: Solo agregar si "Activo" es Y o N
+                        # Validar que solo sea Y o N en Activo
                         if (cod_usuario and 
                             cod_usuario.strip() and 
                             cod_usuario != 'Cod Usuario' and
@@ -108,12 +120,12 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
     
     print(f"\nSe encontraron {len(grupos)} grupos")
     for codigo, datos in grupos.items():
-        print(f"  Grupo {codigo}: {len(datos['usuarios'])} usuarios, {len(datos['opciones'])} opciones")
+        print(f"  Grupo {codigo}: {len(datos['usuarios'])} usuarios, {len(datos['formas'])} formas, {len(datos['reportes'])} reportes, {len(datos['procesos'])} procesos")
     
     # Crear archivo Excel
     print("\nCreando archivo Excel...")
     wb = Workbook()
-    wb.remove(wb.active)  # Remover hoja por defecto
+    wb.remove(wb.active)
     
     # Estilos
     titulo_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -124,28 +136,24 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
     header_font = Font(bold=True, size=10)
     
     for codigo_grupo, datos in sorted(grupos.items()):
-        # Crear nombre de hoja (máximo 31 caracteres en Excel)
+        # Crear nombre de hoja
         nombre_hoja = f"{codigo_grupo} {datos['nombre']}"[:31]
-        
-        # Limpiar caracteres no permitidos en nombres de hojas
         nombre_hoja = re.sub(r'[\\/*?:\[\]]', '', nombre_hoja)
         
         ws = wb.create_sheet(title=nombre_hoja)
-        
         fila_actual = 1
         
-        # FILA 1: Título del grupo con formato
+        # TÍTULO DEL GRUPO
         cell = ws.cell(row=fila_actual, column=1, value=f"{datos['codigo']} {datos['nombre']}")
         cell.font = titulo_font
         cell.fill = titulo_fill
         ws.merge_cells(start_row=fila_actual, start_column=1, end_row=fila_actual, end_column=7)
         fila_actual += 1
         
-        # SECCIÓN DE USUARIOS (si existen)
+        # SECCIÓN DE USUARIOS
         if datos['usuarios']:
-            fila_actual += 1  # Línea en blanco
+            fila_actual += 1
             
-            # Encabezados de usuarios
             ws.cell(row=fila_actual, column=1, value="#").font = header_font
             ws.cell(row=fila_actual, column=1).fill = header_fill
             ws.cell(row=fila_actual, column=2, value="Cod Usuario").font = header_font
@@ -156,7 +164,6 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
             ws.cell(row=fila_actual, column=4).fill = header_fill
             fila_actual += 1
             
-            # Datos de usuarios con numeración
             for idx, usuario in enumerate(datos['usuarios'], start=1):
                 ws.cell(row=fila_actual, column=1, value=idx)
                 ws.cell(row=fila_actual, column=2, value=usuario['codigo'])
@@ -164,35 +171,65 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
                 ws.cell(row=fila_actual, column=4, value=usuario['activo'])
                 fila_actual += 1
             
-            fila_actual += 1  # Línea en blanco
+            fila_actual += 1
         
-        # SECCIÓN DE OPCIONES POR GRUPO
-        # Título de la sección
+        # SECCIÓN DE FORMAS
         cell = ws.cell(row=fila_actual, column=1, value="OPCIONES POR GRUPO")
         cell.font = seccion_font
         cell.fill = seccion_fill
         ws.merge_cells(start_row=fila_actual, start_column=1, end_row=fila_actual, end_column=7)
         fila_actual += 1
         
-        # Encabezados de opciones
         encabezados = ['Formas', 'Insertar', 'Modificar', 'Eliminar', 'Consultar', 'Ejecuta Procesos', 'Otros Procesos']
-        
         for col, encabezado in enumerate(encabezados, start=1):
             cell = ws.cell(row=fila_actual, column=col, value=encabezado)
             cell.font = header_font
             cell.fill = header_fill
         fila_actual += 1
         
-        # Datos de opciones
-        if datos['opciones']:
-            for opcion_data in datos['opciones']:
-                for col, valor in enumerate(opcion_data, start=1):
-                    if col <= 7 and valor and valor.strip():  # Solo 7 columnas
+        if datos['formas']:
+            for forma_data in datos['formas']:
+                for col, valor in enumerate(forma_data, start=1):
+                    if col <= 7 and valor and valor.strip():
+                        ws.cell(row=fila_actual, column=col, value=valor.strip())
+                fila_actual += 1
+        
+        fila_actual += 1
+        
+        # SECCIÓN DE REPORTES
+        encabezados_reportes = ['Reportes', 'Insertar', 'Modificar', 'Eliminar', 'Consultar', 'Ejecuta Procesos', 'Otros Procesos']
+        for col, encabezado in enumerate(encabezados_reportes, start=1):
+            cell = ws.cell(row=fila_actual, column=col, value=encabezado)
+            cell.font = header_font
+            cell.fill = header_fill
+        fila_actual += 1
+        
+        if datos['reportes']:
+            for reporte_data in datos['reportes']:
+                for col, valor in enumerate(reporte_data, start=1):
+                    if col <= 7 and valor and valor.strip():
+                        ws.cell(row=fila_actual, column=col, value=valor.strip())
+                fila_actual += 1
+        
+        fila_actual += 1
+        
+        # SECCIÓN DE PROCESOS
+        encabezados_procesos = ['Procesos', 'Insertar', 'Modificar', 'Eliminar', 'Consultar', 'Ejecuta Procesos', 'Otros Procesos']
+        for col, encabezado in enumerate(encabezados_procesos, start=1):
+            cell = ws.cell(row=fila_actual, column=col, value=encabezado)
+            cell.font = header_font
+            cell.fill = header_fill
+        fila_actual += 1
+        
+        if datos['procesos']:
+            for proceso_data in datos['procesos']:
+                for col, valor in enumerate(proceso_data, start=1):
+                    if col <= 7 and valor and valor.strip():
                         ws.cell(row=fila_actual, column=col, value=valor.strip())
                 fila_actual += 1
         
         # Ajustar anchos de columna
-        ws.column_dimensions['A'].width = 35
+        ws.column_dimensions['A'].width = 50
         ws.column_dimensions['B'].width = 18
         ws.column_dimensions['C'].width = 18
         ws.column_dimensions['D'].width = 18
@@ -200,16 +237,13 @@ def procesar_archivo_privilegios(ruta_archivo_txt, ruta_archivo_excel):
         ws.column_dimensions['F'].width = 18
         ws.column_dimensions['G'].width = 18
     
-    # Guardar archivo
     wb.save(ruta_archivo_excel)
     print(f"\n✓ Archivo Excel creado exitosamente: {ruta_archivo_excel}")
     print(f"✓ Total de hojas creadas: {len(grupos)}")
 
-# Ejemplo de uso
 if __name__ == "__main__":
-    # Cambia estas rutas por las tuyas
-    archivo_entrada = "privilegios.txt"  # Tu archivo TXT
-    archivo_salida = "privilegios_organizados.xlsx"  # Excel de salida
+    archivo_entrada = "privilegios.txt"
+    archivo_salida = "privilegios_organizados.xlsx"
     
     try:
         procesar_archivo_privilegios(archivo_entrada, archivo_salida)
